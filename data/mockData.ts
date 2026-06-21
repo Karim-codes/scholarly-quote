@@ -1,6 +1,10 @@
 import { Colors } from '@/constants/Colors';
 import { Book, Quote, Scholar, Topic } from '@/constants/Types';
 
+// ─── Synchronous data (used by screens that haven't migrated to async DB yet)
+// ─── The primary data store is now data/database.ts (SQLite).
+// ─── When adding new quotes, add them to SEED_QUOTES in database.ts.
+
 // ─── Scholars ────────────────────────────────────────────────
 
 export const scholars: Scholar[] = [
@@ -118,6 +122,8 @@ export const quotes: Quote[] = [
     topic: 'Heart',
     isPremium: false,
     isVerified: true,
+    commentary: 'Ibn al-Qayyim teaches that the human heart has a God-shaped void that nothing worldly can fill. No amount of wealth, status, or relationships can substitute for a living connection with the Divine. True inner calm comes only through dhikr — the conscious remembrance of Allah in daily life.',
+    commentaryAr: 'يُعلّمنا ابن القيّم أن في القلب فراغًا لا يملؤه شيء من الدنيا، ولا مال ولا جاه ولا علاقات. السكينة الحقيقية لا تأتي إلا بالذكر — أي استحضار الله في كل لحظة من حياتنا اليومية.',
   },
   {
     id: 'q2',
@@ -128,6 +134,8 @@ export const quotes: Quote[] = [
     topic: 'Patience',
     isPremium: false,
     isVerified: true,
+    commentary: 'This is Ibn al-Qayyim\'s famous threefold framework of patience (sabr). It\'s not just about enduring hardship — it also means persisting in worship when motivation fades, and resisting temptation when sin is easy. Mastering all three forms is what elevates a believer\'s spiritual rank.',
+    commentaryAr: 'هذا إطار ابن القيم الثلاثي الشهير للصبر. فالصبر ليس تحمّل المشقة فحسب، بل يشمل المداومة على العبادة حين يضعف الدافع، ومقاومة الإغراء حين تسهل المعصية. إتقان الأنواع الثلاثة هو ما يرفع مقام المؤمن.',
   },
   {
     id: 'q3',
@@ -240,6 +248,8 @@ export const quotes: Quote[] = [
     topic: 'Patience',
     isPremium: false,
     isVerified: true,
+    commentary: 'Imam al-Shafi\'i distills the Islamic concept of qadar (divine decree) into a powerful affirmation. By internalising that every provision, opportunity, and trial is precisely calibrated by Allah, anxiety over missed chances dissolves and is replaced by trust (tawakkul).',
+    commentaryAr: 'يختصر الإمام الشافعي مفهوم القدر الإسلامي في عبارة بليغة. حين نستوعب أن كل رزق وفرصة وابتلاء مُقدَّر بدقة من الله، يتبدد القلق على ما فات ويحل محله التوكل.',
   },
   {
     id: 'q14',
@@ -322,6 +332,8 @@ export const quotes: Quote[] = [
     topic: 'Patience',
     isPremium: false,
     isVerified: true,
+    commentary: 'Imam Ali uses a vivid metaphor from nature: stars are always present, but they become visible only against a dark sky. Likewise, a person\'s inner strengths — faith, resilience, character — emerge most clearly during times of hardship, not ease.',
+    commentaryAr: 'يستخدم الإمام علي استعارة بليغة من الطبيعة: النجوم موجودة دائمًا لكنها لا تُرى إلا في الظلام. كذلك قوى الإنسان الداخلية — الإيمان والصبر والخُلُق — لا تظهر بجلاء إلا في أوقات الشدة لا الرخاء.',
   },
   {
     id: 'q22',
@@ -404,6 +416,8 @@ export const quotes: Quote[] = [
     topic: 'Knowledge',
     isPremium: false,
     isVerified: true,
+    commentary: 'Al-Ghazali warns against two extremes: the armchair scholar who hoards information but never lives by it, and the zealous activist who acts without understanding. True Islamic scholarship demands that knowledge and practice walk hand in hand — each is incomplete without the other.',
+    commentaryAr: 'يحذر الغزالي من طرفين: عالمٌ يكنز المعرفة دون أن يعمل بها، وناشطٌ متحمس يعمل دون فهم. العلم الإسلامي الحقيقي يقتضي أن يسير العلم والعمل جنبًا إلى جنب — فكل منهما ناقص بدون الآخر.',
   },
   {
     id: 'q30',

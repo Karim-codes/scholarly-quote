@@ -1,7 +1,9 @@
+import { getDatabase } from '@/data/database';
 import '@/i18n';
 import { initAppStore } from '@/store/useAppStore';
 import { initAuth } from '@/store/useAuthStore';
 import { initLanguage } from '@/store/useLanguageStore';
+import { getHasOnboarded, initUserStore } from '@/store/useUserStore';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -51,13 +53,14 @@ function AppSplash({ opacity }: { opacity: Animated.Value }) {
 
   useEffect(() => {
     Animated.sequence([
-      Animated.timing(starOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.delay(200),
+      Animated.timing(starOpacity, { toValue: 1, duration: 600, useNativeDriver: true }),
       Animated.parallel([
-        Animated.timing(titleOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-        Animated.timing(titleY, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(titleOpacity, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(titleY, { toValue: 0, duration: 700, useNativeDriver: true }),
       ]),
-      Animated.timing(lineScale, { toValue: 1, duration: 350, useNativeDriver: true }),
-      Animated.timing(subtitleOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(lineScale, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(subtitleOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
     ]).start();
   }, []);
 
@@ -102,7 +105,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     initAuth();
-    Promise.all([initLanguage(), initAppStore()]).finally(() => setLangReady(true));
+    Promise.all([initLanguage(), initAppStore(), initUserStore(), getDatabase()]).finally(() => setLangReady(true));
   }, []);
 
   useEffect(() => {
@@ -114,35 +117,39 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
       // Let our in-app splash breathe for a moment, then fade out
       Animated.sequence([
-        Animated.delay(500),
+        Animated.delay(2800),
         Animated.timing(splashOpacity, {
           toValue: 0,
-          duration: 600,
+          duration: 700,
           useNativeDriver: true,
         }),
       ]).start(() => setSplashDone(true));
     }
   }, [loaded, langReady]);
 
+  const needsOnboarding = splashDone && !getHasOnboarded();
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {splashDone && <RootLayoutNav />}
+      {splashDone && <RootLayoutNav initialRoute={needsOnboarding ? 'onboarding' : '(tabs)'} />}
       {!splashDone && <AppSplash opacity={splashOpacity} />}
     </GestureHandlerRootView>
   );
 }
 
-function RootLayoutNav() {
+function RootLayoutNav({ initialRoute }: { initialRoute: string }) {
   return (
     <ThemeProvider value={ScholarQuoteTheme}>
       <StatusBar style="light" />
       <Stack
+        initialRouteName={initialRoute}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: Colors.background },
           animation: 'slide_from_right',
         }}
       >
+        <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
           name="quote/[id]"

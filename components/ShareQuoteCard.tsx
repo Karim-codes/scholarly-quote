@@ -1,8 +1,8 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
-import { TOPIC_ICONS, type Quote } from '@/constants/Types';
+import { Colors } from '@/constants/Colors';
+import { type Quote } from '@/constants/Types';
 
 interface ShareQuoteCardProps {
   quote: Quote;
@@ -21,156 +21,141 @@ export default function ShareQuoteCard({ quote, isArabic }: ShareQuoteCardProps)
 
   return (
     <View style={styles.card}>
-      {/* Decorative top accent bar */}
-      <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+      {/* Soft accent glow for depth */}
+      <View style={[styles.glow, { backgroundColor: accentColor }]} />
 
-      {/* Topic */}
+      {/* Topic label between rules */}
       <View style={styles.topicRow}>
-        <Text style={styles.topicEmoji}>
-          {TOPIC_ICONS[quote.topic]}
+        <View style={[styles.rule, { backgroundColor: accentColor + '40' }]} />
+        <Text style={[styles.topicText, { color: accentColor }]}>
+          {quote.topic.toUpperCase()}
         </Text>
-        <View style={[styles.topicBadge, { backgroundColor: accentColor + '18' }]}>
-          <Text style={[styles.topicText, { color: accentColor }]}>
-            {quote.topic.toUpperCase()}
-          </Text>
-        </View>
+        <View style={[styles.rule, { backgroundColor: accentColor + '40' }]} />
       </View>
 
-      {/* Quote */}
-      <View style={[styles.quoteSection, { borderLeftColor: accentColor }]}>
-        <Text style={styles.openQuote}>&ldquo;</Text>
-        <Text
-          style={[
-            styles.quoteText,
-            isArabic && { fontWeight: '500', letterSpacing: 0, textAlign: 'right' },
-          ]}
-        >
-          {quoteText}
-        </Text>
+      {/* Decorative quote glyph */}
+      <Text style={[styles.glyph, { color: accentColor + '33' }]}>“</Text>
+
+      {/* Quote text */}
+      <Text
+        style={[
+          styles.quoteText,
+          isArabic && { fontWeight: '500', letterSpacing: 0, lineHeight: 42 },
+        ]}
+      >
+        {quoteText}
+      </Text>
+
+      {/* Ornamental divider */}
+      <View style={styles.ornament}>
+        <View style={[styles.ornamentLine, { backgroundColor: accentColor + '30' }]} />
+        <View style={[styles.ornamentDiamond, { backgroundColor: accentColor }]} />
+        <View style={[styles.ornamentLine, { backgroundColor: accentColor + '30' }]} />
       </View>
 
-      {/* Attribution */}
-      <View style={styles.attributionRow}>
-        <View style={[styles.scholarAvatar, { backgroundColor: accentColor + '20' }]}>
-          <Text style={[styles.scholarInitials, { color: accentColor }]}>
-            {quote.scholar?.initials}
-          </Text>
-        </View>
-        <View style={styles.attributionText}>
-          <Text style={[styles.scholarName, { color: accentColor }]}>
-            {scholarName}
-          </Text>
-          <Text style={styles.bookName}>{bookTitle}</Text>
-        </View>
-      </View>
+      {/* Scholar block */}
+      <Text style={[styles.scholarName, { color: Colors.textPrimary }]}>
+        {scholarName}
+      </Text>
+      <Text style={styles.bookName}>{bookTitle}</Text>
 
-      {/* Footer with app branding */}
+      {/* Footer wordmark */}
       <View style={styles.footer}>
-        <View style={styles.footerLine} />
-        <Text style={styles.appName}>Scholar Quote</Text>
+        <Text style={styles.footerMark}>S C H O L A R   Q U O T E</Text>
       </View>
     </View>
   );
 }
 
-const CARD_WIDTH = 360;
+const CARD_WIDTH = 400;
 
 const styles = StyleSheet.create({
   card: {
     width: CARD_WIDTH,
-    backgroundColor: '#0e0e0e',
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    paddingTop: 0,
+    backgroundColor: '#0b0b0b',
+    borderRadius: 28,
+    paddingHorizontal: 40,
+    paddingVertical: 52,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1a1a1a',
     overflow: 'hidden',
   },
-  accentBar: {
-    height: 4,
-    marginHorizontal: -Spacing.lg,
-    marginBottom: Spacing.lg,
+  glow: {
+    position: 'absolute',
+    top: -120,
+    right: -120,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    opacity: 0.06,
   },
   topicRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
+    gap: 12,
+    marginBottom: 28,
   },
-  topicEmoji: {
-    fontSize: 20,
-  },
-  topicBadge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
+  rule: {
+    width: 28,
+    height: 1,
   },
   topicText: {
     fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  quoteSection: {
-    borderLeftWidth: 3,
-    paddingLeft: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  openQuote: {
-    fontSize: 48,
     fontWeight: '700',
-    color: '#ffffff18',
-    lineHeight: 48,
-    marginBottom: -12,
+    letterSpacing: 3,
+  },
+  glyph: {
+    fontSize: 80,
+    fontWeight: '700',
+    lineHeight: 64,
+    height: 56,
+    marginBottom: 8,
   },
   quoteText: {
-    fontSize: 22,
+    fontSize: 25,
     fontWeight: '300',
-    lineHeight: 34,
-    color: '#f0f0f0',
+    lineHeight: 38,
+    color: '#f2f2f2',
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
-  attributionRow: {
+  ornament: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    gap: 10,
+    marginVertical: 28,
   },
-  scholarAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
+  ornamentLine: {
+    width: 36,
+    height: 1,
   },
-  scholarInitials: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  attributionText: {
-    flex: 1,
+  ornamentDiamond: {
+    width: 6,
+    height: 6,
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }],
   },
   scholarName: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '600',
-    marginBottom: 2,
+    textAlign: 'center',
+    marginBottom: 4,
   },
   bookName: {
     fontSize: 13,
     fontWeight: '400',
-    color: '#666666',
+    color: '#777777',
     fontStyle: 'italic',
+    textAlign: 'center',
   },
   footer: {
-    alignItems: 'center',
+    marginTop: 44,
   },
-  footerLine: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#222222',
-    alignSelf: 'stretch',
-    marginBottom: Spacing.md,
-  },
-  appName: {
-    fontSize: 12,
+  footerMark: {
+    fontSize: 10,
     fontWeight: '600',
-    letterSpacing: 2,
-    color: '#555555',
-    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: '#4a4a4a',
   },
 });

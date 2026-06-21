@@ -9,6 +9,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    TurboModuleRegistry,
     View,
 } from 'react-native';
 
@@ -16,6 +17,15 @@ import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
 import type { Quote } from '@/constants/Types';
 
 import ShareQuoteCard from './ShareQuoteCard';
+import StoryQuoteCard from './StoryQuoteCard';
+
+// react-native-view-shot ships a native module (RNViewShot). It is only
+// present in a development/production build that was compiled AFTER the
+// package was installed — never in Expo Go. Instead of relying on the
+// execution environment (unreliable), probe the native registry directly:
+// TurboModuleRegistry.get() returns null when the module is missing rather
+// than throwing, so we can safely fall back to text-only sharing.
+const HAS_VIEW_SHOT = TurboModuleRegistry.get('RNViewShot') != null;
 
 interface ShareModalProps {
   visible: boolean;
@@ -27,7 +37,9 @@ interface ShareModalProps {
 export default function ShareModal({ visible, onClose, quote, isArabic }: ShareModalProps) {
   const { t } = useTranslation();
   const cardRef = useRef<View>(null);
+  const storyRef = useRef<View>(null);
   const [capturing, setCapturing] = useState(false);
+  const [capturingStory, setCapturingStory] = useState(false);
 
   const handleShareText = async () => {
     onClose();
@@ -48,15 +60,18 @@ export default function ShareModal({ visible, onClose, quote, isArabic }: ShareM
     }
   };
 
-  const handleShareImage = useCallback(async () => {
-    setCapturing(true);
+  const shareImageFromRef = useCallback(async (ref: React.RefObject<View | null>, setLoading: (v: boolean) => void) => {
+    if (!HAS_VIEW_SHOT) {
+      onClose();
+      Alert.alert(t('share.imageUnavailable'), t('share.imageUnavailableDesc'));
+      return;
+    }
+    setLoading(true);
     try {
-      // Lazy-import to avoid crashing in Expo Go (no native modules)
       const { captureRef } = await import('react-native-view-shot');
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1 });
+      const uri = await captureRef(ref, { format: 'png', quality: 1 });
       onClose();
 
-      // Try expo-sharing first (works in dev client / production builds)
       try {
         const Sharing = await import('expo-sharing');
         if (Sharing.isAvailableAsync && (await Sharing.isAvailableAsync())) {
@@ -69,23 +84,30 @@ export default function ShareModal({ visible, onClose, quote, isArabic }: ShareM
       } catch {
         // expo-sharing not available — fall through
       }
-      // Fallback: share file URI via RN Share (iOS supports url)
       await Share.share({ url: uri });
     } catch {
-      Alert.alert(
-        'Image sharing unavailable',
-        'This feature requires a development build. Use "Text Only" for now.',
-      );
+      Alert.alert(t('share.imageUnavailable'), t('share.imageUnavailableDesc'));
     } finally {
-      setCapturing(false);
+      setLoading(false);
     }
   }, [onClose, t]);
 
+  const handleShareImage = useCallback(() => {
+    shareImageFromRef(cardRef, setCapturing);
+  }, [shareImageFromRef]);
+
+  const handleShareStory = useCallback(() => {
+    shareImageFromRef(storyRef, setCapturingStory);
+  }, [shareImageFromRef]);
+
   return (
     <>
-      {/* Hidden card for capture — rendered off-screen */}
+      {/* Hidden cards for capture — rendered off-screen */}
       <View style={styles.offscreen} ref={cardRef} collapsable={false}>
         <ShareQuoteCard quote={quote} isArabic={isArabic} />
+      </View>
+      <View style={styles.offscreen} ref={storyRef} collapsable={false}>
+        <StoryQuoteCard quote={quote} isArabic={isArabic} />
       </View>
 
       <Modal
@@ -136,6 +158,27 @@ export default function ShareModal({ visible, onClose, quote, isArabic }: ShareM
               <View style={styles.optionContent}>
                 <Text style={styles.optionTitle}>{t('share.image')}</Text>
                 <Text style={styles.optionDesc}>{t('share.imageDesc')}</Text>
+              </View>
+              <FontAwesome name="chevron-right" size={12} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            {/* Story export option */}
+            <TouchableOpacity
+              style={styles.option}
+              onPress={handleShareStory}
+              activeOpacity={0.7}
+              disabled={capturingStory}
+            >
+              <View style={[styles.optionIcon, { backgroundColor: Colors.accent + '12' }]}>
+                {capturingStory ? (
+                  <ActivityIndicator size="small" color={Colors.accent} />
+                ) : (
+                  <FontAwesome name="mobile-phone" size={24} color={Colors.accent} />
+                )}
+              </View>
+              <View style={styles.optionContent}>
+                <Text style={styles.optionTitle}>{t('share.storyExport')}</Text>
+                <Text style={styles.optionDesc}>{t('share.storyExportDesc')}</Text>
               </View>
               <FontAwesome name="chevron-right" size={12} color={Colors.textMuted} />
             </TouchableOpacity>

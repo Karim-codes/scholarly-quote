@@ -31,6 +31,8 @@ export interface Quote {
   topic: Topic;
   isPremium: boolean;
   isVerified: boolean;
+  commentary?: string;
+  commentaryAr?: string;
   scholar?: Scholar;
   book?: Book;
 }

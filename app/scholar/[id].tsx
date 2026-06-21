@@ -1,6 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ScrollView,
@@ -12,8 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
+import type { Book, Quote, Scholar } from '@/constants/Types';
 import { arabicQuoteSmallOverride } from '@/constants/Typography';
-import { books, getQuotesByScholar, scholars } from '@/data/mockData';
+import { getBooksByScholarAsync, getQuotesByScholarAsync, getScholarByIdAsync } from '@/data/database';
 import { useSaveQuote } from '@/hooks/useSaveQuote';
 import { useLanguage } from '@/store/useLanguageStore';
 
@@ -25,7 +26,17 @@ export default function ScholarProfileScreen() {
   const isArabic = effectiveQuoteLanguage === 'ar';
   const { save, isSaved } = useSaveQuote();
 
-  const scholar = scholars.find((s) => s.id === id);
+  const [scholar, setScholar] = useState<Scholar | null>(null);
+  const [scholarQuotes, setScholarQuotes] = useState<Quote[]>([]);
+  const [scholarBooks, setScholarBooks] = useState<Book[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    getScholarByIdAsync(id).then((s) => setScholar(s ?? null));
+    getQuotesByScholarAsync(id).then(setScholarQuotes);
+    getBooksByScholarAsync(id).then(setScholarBooks);
+  }, [id]);
+
   if (!scholar) {
     return (
       <SafeAreaView style={styles.container}>
@@ -34,8 +45,6 @@ export default function ScholarProfileScreen() {
     );
   }
 
-  const scholarQuotes = getQuotesByScholar(scholar.id);
-  const scholarBooks = books.filter((b) => b.scholarId === scholar.id);
   const accentColor = scholar.accentColor;
 
   return (
@@ -49,12 +58,6 @@ export default function ScholarProfileScreen() {
         >
           <FontAwesome name="chevron-left" size={16} color={Colors.textSecondary} />
         </TouchableOpacity>
-        {scholar.isPremium && (
-          <View style={styles.premiumBadge}>
-            <FontAwesome name="lock" size={10} color={Colors.accentMuted} />
-            <Text style={styles.premiumText}>PREMIUM</Text>
-          </View>
-        )}
       </View>
 
       <ScrollView
@@ -63,13 +66,6 @@ export default function ScholarProfileScreen() {
       >
         {/* Scholar header */}
         <View style={styles.scholarHeader}>
-          <View
-            style={[styles.avatarLarge, { backgroundColor: accentColor + '15' }]}
-          >
-            <Text style={[styles.avatarInitials, { color: accentColor }]}>
-              {scholar.initials}
-            </Text>
-          </View>
           <Text style={[styles.scholarName, { color: accentColor }]}>
             {scholar.name}
           </Text>
@@ -214,18 +210,6 @@ const styles = StyleSheet.create({
   scholarHeader: {
     alignItems: 'center',
     marginBottom: Spacing.xl,
-  },
-  avatarLarge: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  avatarInitials: {
-    fontSize: 28,
-    fontWeight: '700',
   },
   scholarName: {
     fontSize: 20,

@@ -4,19 +4,22 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Alert,
+    Linking,
     Modal,
+    Platform,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
-import { usePremium } from '@/store/useAppStore';
-import { signOut, useAuth } from '@/store/useAuthStore';
 import { useLanguage, type Language, type QuoteLanguage } from '@/store/useLanguageStore';
+import { useUser } from '@/store/useUserStore';
 
 function SettingsRow({
   icon,
@@ -74,16 +77,73 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { language, quoteLanguage, setLanguage, setQuoteLanguage } = useLanguage();
-  const { user, isSignedIn } = useAuth();
-  const { isPremium } = usePremium();
+  const { name: userName, updateName } = useUser();
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [quoteLangModalVisible, setQuoteLangModalVisible] = useState(false);
+  const [notifModalVisible, setNotifModalVisible] = useState(false);
+  const [appearanceModalVisible, setAppearanceModalVisible] = useState(false);
+  const [nameModalVisible, setNameModalVisible] = useState(false);
+  const [editedName, setEditedName] = useState(userName);
 
-  const handleSignOut = () => {
-    Alert.alert(t('settings.signOut'), t('settings.signOutConfirm'), [
-      { text: t('settings.cancel'), style: 'cancel' },
-      { text: t('settings.signOut'), style: 'destructive', onPress: () => signOut() },
-    ]);
+  const [notifTime, setNotifTime] = useState('5:30 AM');
+  const [appearance, setAppearance] = useState('dark');
+
+  const NOTIF_TIME_OPTIONS = ['5:00 AM', '5:30 AM', '6:00 AM', '6:30 AM', '7:00 AM', '7:30 AM', '8:00 AM', '9:00 PM', '10:00 PM'];
+  const APPEARANCE_OPTIONS = [{ key: 'dark', label: 'Dark' }, { key: 'midnight', label: 'Midnight' }, { key: 'amoled', label: 'AMOLED' }];
+
+  const handleSaveName = () => {
+    if (editedName.trim()) {
+      updateName(editedName.trim());
+    }
+    setNameModalVisible(false);
+  };
+
+  // TODO: Replace with your real App Store ID once published
+  const APP_STORE_ID = '6504000000';
+  const SUPPORT_EMAIL = 'support@scholarquote.app';
+
+  const handleRateApp = () => {
+    const url = Platform.select({
+      ios: `itms-apps://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`,
+      default: `https://apps.apple.com/app/id${APP_STORE_ID}`,
+    });
+    Linking.openURL(url!);
+  };
+
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: 'Check out Scholar Quote — daily wisdom from classical Islamic scholars.\nhttps://apps.apple.com/app/id' + APP_STORE_ID,
+      });
+    } catch (_) {}
+  };
+
+  const handleSendFeedback = () => {
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Scholar%20Quote%20Feedback`);
+  };
+
+  const handleHelpFaq = () => {
+    Alert.alert(
+      t('settings.helpFaq'),
+      'Have a question? Email us at ' + SUPPORT_EMAIL + ' and we\'ll get back to you within 24 hours.',
+      [{ text: t('premium.ok') }]
+    );
+  };
+
+  const handleAbout = () => {
+    Alert.alert(
+      'About Scholar Quote',
+      'Scholar Quote delivers daily wisdom from classical Islamic scholars — for the sake of Allah.\n\nAll features are free. Your support keeps us going.\n\nVersion 1.0.0',
+      [{ text: t('premium.ok') }]
+    );
+  };
+
+  const handleTerms = () => {
+    Linking.openURL('https://scholarquote.app/terms');
+  };
+
+  const handlePrivacy = () => {
+    Linking.openURL('https://scholarquote.app/privacy');
   };
 
   const currentLangLabel = language === 'ar' ? t('settings.arabic') : t('settings.english');
@@ -184,6 +244,120 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </Modal>
 
+      {/* Notification time picker modal */}
+      <Modal
+        visible={notifModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNotifModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setNotifModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('settings.notifications')}</Text>
+            {NOTIF_TIME_OPTIONS.map((time) => (
+              <TouchableOpacity
+                key={time}
+                style={[
+                  styles.langOption,
+                  notifTime === time && styles.langOptionActive,
+                ]}
+                onPress={() => { setNotifTime(time); setNotifModalVisible(false); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.langOptionText,
+                  notifTime === time && styles.langOptionTextActive,
+                ]}>
+                  {time}
+                </Text>
+                {notifTime === time && (
+                  <FontAwesome name="check" size={14} color={Colors.accent} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Appearance picker modal */}
+      <Modal
+        visible={appearanceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAppearanceModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setAppearanceModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('settings.appearance')}</Text>
+            {APPEARANCE_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[
+                  styles.langOption,
+                  appearance === opt.key && styles.langOptionActive,
+                ]}
+                onPress={() => { setAppearance(opt.key); setAppearanceModalVisible(false); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.langOptionText,
+                  appearance === opt.key && styles.langOptionTextActive,
+                ]}>
+                  {opt.label}
+                </Text>
+                {appearance === opt.key && (
+                  <FontAwesome name="check" size={14} color={Colors.accent} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Name edit modal */}
+      <Modal
+        visible={nameModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setNameModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setNameModalVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Name</Text>
+            <View style={styles.nameInputRow}>
+              <TextInput
+                style={styles.nameInput}
+                value={editedName}
+                onChangeText={setEditedName}
+                placeholder="Your name"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="words"
+                autoFocus
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.nameButton}
+              onPress={handleSaveName}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.nameButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -193,42 +367,35 @@ export default function SettingsScreen() {
           <Text style={styles.title}>{t('settings.title')}</Text>
         </View>
 
-        {/* Account section */}
+        {/* User name card */}
         <TouchableOpacity
           style={styles.accountCard}
-          activeOpacity={isSignedIn ? 1 : 0.8}
-          disabled={isSignedIn}
-          onPress={() => router.push('/auth')}
+          activeOpacity={0.8}
+          onPress={() => { setEditedName(userName); setNameModalVisible(true); }}
         >
           <View style={styles.avatarCircle}>
             <FontAwesome name="user" size={22} color={Colors.textSecondary} />
           </View>
           <View style={styles.accountInfo}>
             <Text style={styles.accountName}>
-              {isSignedIn ? user?.displayName || user?.email || t('settings.guestUser') : t('settings.guestUser')}
+              {userName || 'Scholar Quote User'}
             </Text>
-            <Text style={styles.accountEmail}>
-              {isSignedIn ? user?.email ?? '' : t('settings.signInPrompt')}
-            </Text>
+            <Text style={styles.accountEmail}>Tap to edit name</Text>
           </View>
-          {!isSignedIn && <FontAwesome name="chevron-right" size={12} color={Colors.textMuted} />}
+          <FontAwesome name="chevron-right" size={12} color={Colors.textMuted} />
         </TouchableOpacity>
 
-        {/* Premium Banner */}
+        {/* Support Us Banner */}
         <TouchableOpacity
-          style={styles.premiumBanner}
+          style={styles.supportBanner}
           onPress={() => router.push('/premium')}
           activeOpacity={0.8}
         >
-          <View style={styles.premiumLeft}>
-            <FontAwesome name="star" size={18} color={Colors.textPrimary} />
-            <View style={styles.premiumTextGroup}>
-              <Text style={styles.premiumTitle}>
-                {isPremium ? t('settings.premiumActive') : t('settings.upgradePremium')}
-              </Text>
-              <Text style={styles.premiumDesc}>
-                {isPremium ? t('settings.premiumActiveDesc') : t('settings.premiumDesc')}
-              </Text>
+          <View style={styles.supportLeft}>
+            <FontAwesome name="heart" size={18} color="#e85d5d" />
+            <View style={styles.supportTextGroup}>
+              <Text style={styles.supportTitle}>{t('settings.upgradePremium')}</Text>
+              <Text style={styles.supportDesc}>{t('settings.premiumDesc')}</Text>
             </View>
           </View>
           <FontAwesome name="chevron-right" size={12} color={Colors.textMuted} />
@@ -252,49 +419,32 @@ export default function SettingsScreen() {
           <SettingsRow
             icon="bell-o"
             label={t('settings.notifications')}
-            value="5:30 AM"
-            onPress={() => {}}
+            value={notifTime}
+            onPress={() => setNotifModalVisible(true)}
           />
           <SettingsRow
             icon="moon-o"
             label={t('settings.appearance')}
-            value={t('settings.dark')}
-            onPress={() => {}}
-          />
-        </View>
-
-        {/* Widget */}
-        <Text style={styles.sectionTitle}>{t('settings.widget')}</Text>
-        <View style={styles.section}>
-          <SettingsRow
-            icon="th-large"
-            label={t('settings.widgetSize')}
-            value={t('settings.medium')}
-            onPress={() => {}}
-          />
-          <SettingsRow
-            icon="paint-brush"
-            label={t('settings.widgetTheme')}
-            value={t('settings.classic')}
-            onPress={() => router.push('/premium')}
+            value={APPEARANCE_OPTIONS.find(o => o.key === appearance)?.label || 'Dark'}
+            onPress={() => setAppearanceModalVisible(true)}
           />
         </View>
 
         {/* Support */}
         <Text style={styles.sectionTitle}>{t('settings.support')}</Text>
         <View style={styles.section}>
-          <SettingsRow icon="question-circle-o" label={t('settings.helpFaq')} onPress={() => {}} />
-          <SettingsRow icon="envelope-o" label={t('settings.sendFeedback')} onPress={() => {}} />
-          <SettingsRow icon="star-o" label={t('settings.rateApp')} onPress={() => {}} />
-          <SettingsRow icon="share-alt" label={t('settings.shareWithFriends')} onPress={() => {}} />
+          <SettingsRow icon="question-circle-o" label={t('settings.helpFaq')} onPress={handleHelpFaq} />
+          <SettingsRow icon="envelope-o" label={t('settings.sendFeedback')} onPress={handleSendFeedback} />
+          <SettingsRow icon="star-o" label={t('settings.rateApp')} onPress={handleRateApp} />
+          <SettingsRow icon="share-alt" label={t('settings.shareWithFriends')} onPress={handleShareApp} />
         </View>
 
         {/* About */}
         <Text style={styles.sectionTitle}>{t('settings.about')}</Text>
         <View style={styles.section}>
-          <SettingsRow icon="info-circle" label={t('settings.aboutApp')} onPress={() => {}} />
-          <SettingsRow icon="file-text-o" label={t('settings.terms')} onPress={() => {}} />
-          <SettingsRow icon="lock" label={t('settings.privacy')} onPress={() => {}} />
+          <SettingsRow icon="info-circle" label={t('settings.aboutApp')} onPress={handleAbout} />
+          <SettingsRow icon="file-text-o" label={t('settings.terms')} onPress={handleTerms} />
+          <SettingsRow icon="lock" label={t('settings.privacy')} onPress={handlePrivacy} />
           <SettingsRow
             icon="code"
             label={t('settings.version')}
@@ -302,19 +452,6 @@ export default function SettingsScreen() {
             showChevron={false}
           />
         </View>
-
-        {/* Danger zone */}
-        {isSignedIn && (
-          <View style={styles.section}>
-            <SettingsRow
-              icon="sign-out"
-              label={t('settings.signOut')}
-              onPress={handleSignOut}
-              showChevron={false}
-              destructive
-            />
-          </View>
-        )}
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -377,36 +514,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '400',
     color: Colors.textMuted,
-  },
-  premiumBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.accent + '08',
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.accent + '12',
-    marginBottom: Spacing.xl,
-  },
-  premiumLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  premiumTextGroup: {
-    marginLeft: Spacing.md,
-  },
-  premiumTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 2,
-  },
-  premiumDesc: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: Colors.textSecondary,
   },
   sectionTitle: {
     fontSize: 14,
@@ -513,5 +620,58 @@ const styles = StyleSheet.create({
   langOptionTextActive: {
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  supportBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#e85d5d' + '08',
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#e85d5d' + '18',
+    marginBottom: Spacing.xl,
+  },
+  supportLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  supportTextGroup: {
+    marginLeft: Spacing.md,
+  },
+  supportTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  supportDesc: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: Colors.textSecondary,
+  },
+  nameInputRow: {
+    marginBottom: Spacing.md,
+  },
+  nameInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.md,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  nameButton: {
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  nameButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.background,
   },
 });

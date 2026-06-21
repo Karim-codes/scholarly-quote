@@ -1,6 +1,6 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     FlatList,
@@ -12,8 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
+import type { Quote } from '@/constants/Types';
 import { arabicQuoteSmallOverride } from '@/constants/Typography';
-import { getQuoteWithRelations, quotes } from '@/data/mockData';
+import { getAllQuotes } from '@/data/database';
 import { useSavedQuotes } from '@/store/useAppStore';
 import { useLanguage } from '@/store/useLanguageStore';
 
@@ -24,11 +25,16 @@ export default function SavedScreen() {
   const isArabic = effectiveQuoteLanguage === 'ar';
   const { getSavedIds, toggleSave, savedCount } = useSavedQuotes();
 
+  const [allQuotes, setAllQuotes] = useState<Quote[]>([]);
+
+  useEffect(() => {
+    getAllQuotes().then(setAllQuotes);
+  }, []);
+
   const savedIds = getSavedIds();
   const savedQuotes = savedIds
-    .map((id) => quotes.find((q) => q.id === id))
-    .filter(Boolean)
-    .map((q) => getQuoteWithRelations(q!));
+    .map((id) => allQuotes.find((q) => q.id === id))
+    .filter((q): q is Quote => q != null);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

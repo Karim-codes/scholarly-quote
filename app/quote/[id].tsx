@@ -1,8 +1,9 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+    Modal,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,9 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ShareModal from '@/components/ShareModal';
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
+import type { Quote } from '@/constants/Types';
 import { TOPIC_ICONS } from '@/constants/Types';
 import { arabicQuoteOverride } from '@/constants/Typography';
-import { getQuoteWithRelations, quotes } from '@/data/mockData';
+import { getQuoteByIdAsync } from '@/data/database';
 import { useSaveQuote } from '@/hooks/useSaveQuote';
 import { useLanguage } from '@/store/useLanguageStore';
 
@@ -27,9 +29,14 @@ export default function QuoteDetailScreen() {
   const isArabic = effectiveQuoteLanguage === 'ar';
   const { save, isSaved } = useSaveQuote();
   const [shareVisible, setShareVisible] = useState(false);
+  const [commentaryVisible, setCommentaryVisible] = useState(false);
+  const [quote, setQuote] = useState<Quote | null>(null);
 
-  const rawQuote = quotes.find((q) => q.id === id);
-  if (!rawQuote) {
+  useEffect(() => {
+    if (id) getQuoteByIdAsync(id).then((q) => setQuote(q ?? null));
+  }, [id]);
+
+  if (!quote) {
     return (
       <SafeAreaView style={styles.container}>
         <Text style={styles.errorText}>Quote not found</Text>
@@ -37,7 +44,6 @@ export default function QuoteDetailScreen() {
     );
   }
 
-  const quote = getQuoteWithRelations(rawQuote);
   const saved = isSaved(quote.id);
   const accentColor = quote.scholar?.accentColor || Colors.accent;
 
@@ -102,13 +108,6 @@ export default function QuoteDetailScreen() {
           onPress={() => router.push(`/scholar/${quote.scholarId}`)}
           activeOpacity={0.8}
         >
-          <View
-            style={[styles.scholarAvatar, { backgroundColor: accentColor + '20' }]}
-          >
-            <Text style={[styles.scholarInitials, { color: accentColor }]}>
-              {quote.scholar?.initials}
-            </Text>
-          </View>
           <View style={styles.scholarInfo}>
             <Text style={[styles.scholarName, { color: accentColor }]}>
               {isArabic && quote.scholar?.nameAr ? quote.scholar.nameAr : quote.scholar?.name}
@@ -147,8 +146,52 @@ export default function QuoteDetailScreen() {
           </View>
         )}
 
+        {/* Commentary button */}
+        {(quote.commentary || quote.commentaryAr) && (
+          <TouchableOpacity
+            style={[styles.commentaryButton, { borderColor: accentColor + '30' }]}
+            onPress={() => setCommentaryVisible(true)}
+            activeOpacity={0.8}
+          >
+            <FontAwesome name="lightbulb-o" size={16} color={accentColor} />
+            <Text style={[styles.commentaryButtonText, { color: accentColor }]}>Context & Commentary</Text>
+            <FontAwesome name="chevron-right" size={11} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
+
         <View style={{ height: 60 }} />
       </ScrollView>
+
+      {/* Commentary bottom sheet */}
+      <Modal
+        visible={commentaryVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCommentaryVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetOverlay}
+          activeOpacity={1}
+          onPress={() => setCommentaryVisible(false)}
+        >
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Context & Commentary</Text>
+            <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+              <Text style={[styles.sheetText, isArabic && { textAlign: 'right' }]}>
+                {isArabic && quote.commentaryAr ? quote.commentaryAr : quote.commentary}
+              </Text>
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.sheetClose}
+              onPress={() => setCommentaryVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sheetCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <ShareModal
         visible={shareVisible}
@@ -246,18 +289,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.cardBorder,
     marginBottom: Spacing.lg,
   },
-  scholarAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  scholarInitials: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
   scholarInfo: {
     flex: 1,
   },
@@ -323,5 +354,70 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     marginTop: 100,
+  },
+  commentaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    borderWidth: 1,
+    marginTop: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  commentaryButtonText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheetContainer: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: Spacing.lg,
+    paddingTop: Spacing.md,
+    maxHeight: '70%',
+    borderWidth: 1,
+    borderColor: Colors.cardBorder,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.textMuted,
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
+    opacity: 0.4,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.md,
+  },
+  sheetScroll: {
+    marginBottom: Spacing.md,
+  },
+  sheetText: {
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 26,
+    color: Colors.textSecondary,
+  },
+  sheetClose: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  sheetCloseText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: Colors.textPrimary,
   },
 });

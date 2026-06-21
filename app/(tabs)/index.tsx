@@ -1,12 +1,13 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    Dimensions,
-    FlatList,
-    NativeScrollEvent,
-    NativeSyntheticEvent,
+    ActivityIndicator,
+    Animated,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -17,63 +18,106 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ShareModal from '@/components/ShareModal';
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
+import type { Quote } from '@/constants/Types';
 import { FontFamily, Typography, arabicQuoteOverride, arabicQuoteSmallOverride } from '@/constants/Typography';
-import { getDailyQuote, getQuoteWithRelations, quotes } from '@/data/mockData';
+import { getAllQuotes, getDailyQuoteAsync } from '@/data/database';
 import { useSaveQuote } from '@/hooks/useSaveQuote';
 import { useSavedQuotes, useStreak } from '@/store/useAppStore';
 import { useLanguage } from '@/store/useLanguageStore';
 import { syncDailyQuoteToWidget } from '@/store/widgetSync';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH - Spacing.lg * 2;
 
 export default function TodayScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const { effectiveQuoteLanguage } = useLanguage();
   const isArabic = effectiveQuoteLanguage === 'ar';
-  const dailyQuote = getDailyQuote();
   const { getSavedIds } = useSavedQuotes();
   const { save, isSaved } = useSaveQuote();
   const { currentStreak } = useStreak();
-  const [activeIndex, setActiveIndex] = useState(0);
   const [shareVisible, setShareVisible] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
+
+  // ── Async data from SQLite ─────────────────────────────────
+  const [currentQuote, setCurrentQuote] = useState<Quote | null>(null);
+  const [allQuotes, setAllQuotes] = useState<Quote[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [daily, all] = await Promise.all([getDailyQuoteAsync(), getAllQuotes()]);
+      if (!cancelled) {
+        setCurrentQuote(daily);
+        setAllQuotes(all);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Push today's quote to the iOS home-screen widget whenever it changes.
   useEffect(() => {
-    syncDailyQuoteToWidget(dailyQuote);
-  }, [dailyQuote.id, effectiveQuoteLanguage]);
+    if (currentQuote) syncDailyQuoteToWidget(currentQuote);
+  }, [currentQuote?.id, effectiveQuoteLanguage]);
 
-  // Build swipeable quote list: daily quote first, then a few more free quotes
-  const swipeableQuotes = useMemo(() => {
-    const others = quotes
-      .filter((q) => !q.isPremium && q.id !== dailyQuote.id)
-      .slice(0, 4)
-      .map(getQuoteWithRelations);
-    return [dailyQuote, ...others];
-  }, [dailyQuote]);
+  const saved = currentQuote ? isSaved(currentQuote.id) : false;
+  const accentColor = currentQuote?.scholar?.accentColor || Colors.accent;
 
-  const currentQuote = swipeableQuotes[activeIndex];
-  const saved = isSaved(currentQuote.id);
-  const accentColor = currentQuote.scholar?.accentColor || Colors.accent;
+  // ── Double-tap to save ─────────────────────────────────────
+  const lastTap = useRef(0);
+  const heartScale = useRef(new Animated.Value(0)).current;
+  const heartOpacity = useRef(new Animated.Value(0)).current;
+
+  const handleDoubleTap = useCallback(() => {
+    if (!currentQuote) return;
+    const now = Date.now();
+    if (now - lastTap.current < 300) {
+      // Double-tap detected
+      if (!isSaved(currentQuote.id)) {
+        save(currentQuote.id);
+      }
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+
+      // Animate heart overlay
+      heartScale.setValue(0);
+      heartOpacity.setValue(1);
+      Animated.sequence([
+        Animated.spring(heartScale, { toValue: 1, friction: 3, tension: 100, useNativeDriver: true }),
+        Animated.delay(400),
+        Animated.timing(heartOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+      ]).start();
+    }
+    lastTap.current = now;
+  }, [currentQuote?.id, isSaved, save, heartScale, heartOpacity]);
+
+  // ── Card flip for commentary ───────────────────────────────
+  const [flipped, setFlipped] = useState(false);
+  const flipAnim = useRef(new Animated.Value(0)).current;
+
+  const handleCardFlip = useCallback(() => {
+    const toValue = flipped ? 0 : 1;
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    Animated.spring(flipAnim, { toValue, friction: 8, tension: 60, useNativeDriver: true }).start();
+    setFlipped(!flipped);
+  }, [flipped, flipAnim]);
+
+  // Front rotates 0 → 90°, back rotates -90° → 0°
+  const frontRotate = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg', '90deg', '90deg'] });
+  const backRotate = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['-90deg', '-90deg', '0deg'] });
+  const frontOpacity = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0, 0] });
+  const backOpacity = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+
+  const commentaryText = isArabic && currentQuote?.commentaryAr
+    ? currentQuote.commentaryAr
+    : currentQuote?.commentary;
 
   // Saved quotes for the section
   const savedIds = getSavedIds();
   const savedQuotes = savedIds
-    .map((id) => quotes.find((q) => q.id === id))
-    .filter(Boolean)
-    .map((q) => getQuoteWithRelations(q!))
+    .map((id) => allQuotes.find((q) => q.id === id))
+    .filter((q): q is Quote => q != null)
     .slice(0, 3);
 
   const handleShare = () => setShareVisible(true);
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    if (index !== activeIndex && index >= 0 && index < swipeableQuotes.length) {
-      setActiveIndex(index);
-    }
-  };
 
   const today = new Date();
   const locale = i18n.language === 'ar' ? 'ar-SA' : 'en-US';
@@ -83,51 +127,15 @@ export default function TodayScreen() {
     month: 'long',
   });
 
-  const renderQuoteCard = ({ item: quote }: { item: ReturnType<typeof getQuoteWithRelations> }) => {
-    const color = quote.scholar?.accentColor || Colors.accent;
+  if (loading || !currentQuote) {
     return (
-      <TouchableOpacity
-        style={[styles.quoteCard, { width: CARD_WIDTH, borderLeftColor: color }]}
-        activeOpacity={0.9}
-        onPress={() => router.push(`/quote/${quote.id}`)}
-      >
-        {/* Topic badge */}
-        <View style={styles.topicRow}>
-          <View style={[styles.topicBadge, { backgroundColor: color + '12' }]}>
-            <Text style={[styles.topicText, { color }]}>{quote.topic}</Text>
-          </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color={Colors.accent} />
         </View>
-
-        {/* Quote text */}
-        <Text style={[styles.quoteText, isArabic && arabicQuoteOverride]}>{isArabic && quote.textAr ? quote.textAr : quote.text}</Text>
-
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Attribution */}
-        <TouchableOpacity
-          onPress={() => router.push(`/scholar/${quote.scholarId}`)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.attribution}>
-            <View style={[styles.scholarAvatar, { backgroundColor: color + '18' }]}>
-              <Text style={[styles.scholarInitials, { color }]}>
-                {quote.scholar?.initials}
-              </Text>
-            </View>
-            <View style={styles.attributionText}>
-              <Text style={styles.scholarName}>
-                {isArabic && quote.scholar?.nameAr ? quote.scholar.nameAr : quote.scholar?.name}
-              </Text>
-              <Text style={styles.bookName}>
-                {isArabic && quote.book?.titleAr ? quote.book.titleAr : quote.book?.title}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </TouchableOpacity>
+      </SafeAreaView>
     );
-  };
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -150,37 +158,89 @@ export default function TodayScreen() {
         {/* Bismillah */}
         <Text style={styles.bismillah}>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</Text>
 
-        {/* Swipeable Daily Quote Cards */}
-        <FlatList
-          ref={flatListRef}
-          data={swipeableQuotes}
-          keyExtractor={(item) => item.id}
-          renderItem={renderQuoteCard}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          decelerationRate="fast"
-          contentContainerStyle={{ gap: 0 }}
-          style={{ marginHorizontal: -Spacing.lg }}
-          contentOffset={{ x: 0, y: 0 }}
-          getItemLayout={(_, index) => ({
-            length: CARD_WIDTH,
-            offset: CARD_WIDTH * index,
-            index,
-          })}
-        />
+        {/* Quote of the Day label */}
+        <Text style={styles.quoteOfTheDayLabel}>{t('today.quoteOfTheDay')}</Text>
 
-        {/* Page dots */}
-        <View style={styles.dotsRow}>
-          {swipeableQuotes.map((_, i) => (
-            <View
-              key={i}
-              style={[styles.dot, i === activeIndex && styles.dotActive]}
-            />
-          ))}
-        </View>
+        {/* Daily Quote Card — double-tap to save, tap flip hint for commentary */}
+        <Pressable onPress={handleDoubleTap} style={styles.cardWrapper}>
+          {/* ── FRONT FACE ── */}
+          <Animated.View style={[styles.cardFace, { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontRotate }] }]}>
+            <LinearGradient
+              colors={['#1a1a1a', '#0d0d0d']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.quoteCard}
+            >
+              <View style={[styles.cardGlow, { backgroundColor: accentColor }]} />
+              <View style={styles.cardTopContent}>
+                <View style={styles.topicRow}>
+                  <View style={[styles.topicRule, { backgroundColor: accentColor + '40' }]} />
+                  <Text style={[styles.topicText, { color: accentColor }]}>{currentQuote.topic.toUpperCase()}</Text>
+                  <View style={[styles.topicRule, { backgroundColor: accentColor + '40' }]} />
+                </View>
+                <Text style={[styles.glyph, { color: accentColor + '2e' }]}>{'\u201c'}</Text>
+                <Text style={[styles.quoteText, isArabic && arabicQuoteOverride]}>
+                  {isArabic && currentQuote.textAr ? currentQuote.textAr : currentQuote.text}
+                </Text>
+              </View>
+              <View style={styles.cardBottomContent}>
+                <View style={styles.ornament}>
+                  <View style={[styles.ornamentLine, { backgroundColor: accentColor + '30' }]} />
+                  <View style={[styles.ornamentDiamond, { backgroundColor: accentColor }]} />
+                  <View style={[styles.ornamentLine, { backgroundColor: accentColor + '30' }]} />
+                </View>
+                <TouchableOpacity
+                  onPress={() => router.push(`/scholar/${currentQuote.scholarId}`)}
+                  activeOpacity={0.7}
+                  style={styles.attribution}
+                >
+                  <Text style={styles.scholarName}>
+                    {isArabic && currentQuote.scholar?.nameAr ? currentQuote.scholar.nameAr : currentQuote.scholar?.name}
+                  </Text>
+                  <Text style={styles.bookName}>
+                    {isArabic && currentQuote.book?.titleAr ? currentQuote.book.titleAr : currentQuote.book?.title}
+                  </Text>
+                </TouchableOpacity>
+                {commentaryText ? (
+                  <TouchableOpacity onPress={handleCardFlip} activeOpacity={0.7} style={styles.flipHint}>
+                    <FontAwesome name="refresh" size={11} color={Colors.textMuted} />
+                    <Text style={styles.flipHintText}>{t('commentary.tapToFlip')}</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </LinearGradient>
+          </Animated.View>
+
+          {/* ── BACK FACE (Commentary) ── */}
+          <Animated.View style={[styles.cardFace, styles.cardFaceBack, { opacity: backOpacity, transform: [{ perspective: 1000 }, { rotateY: backRotate }] }]}>
+            <LinearGradient
+              colors={['#141414', '#0a0a0a']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.quoteCard}
+            >
+              <View style={[styles.cardGlow, { backgroundColor: accentColor }]} />
+              <View style={styles.commentaryContent}>
+                <View style={styles.commentaryHeader}>
+                  <FontAwesome name="lightbulb-o" size={18} color={accentColor} />
+                  <Text style={[styles.commentaryTitle, { color: accentColor }]}>{t('commentary.title')}</Text>
+                </View>
+                <Text style={styles.commentaryText}>
+                  {commentaryText || t('commentary.noCommentary')}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={handleCardFlip} activeOpacity={0.7} style={styles.flipHint}>
+                <FontAwesome name="refresh" size={11} color={Colors.textMuted} />
+                <Text style={styles.flipHintText}>{t('commentary.tapToReturn')}</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </Animated.View>
+
+          {/* Heart overlay on double-tap */}
+          <Animated.View pointerEvents="none" style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}>
+            <FontAwesome name="heart" size={64} color={Colors.accent} />
+          </Animated.View>
+        </Pressable>
 
         {/* Action buttons */}
         <View style={styles.actions}>
@@ -249,35 +309,32 @@ export default function TodayScreen() {
         {/* Recent Wisdom section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('today.recentWisdom')}</Text>
-          {quotes
-            .filter((q) => !q.isPremium && q.id !== currentQuote.id)
+          {allQuotes
+            .filter((q) => q.id !== currentQuote?.id)
             .slice(0, 3)
-            .map((q) => {
-              const quote = getQuoteWithRelations(q);
-              return (
-                <TouchableOpacity
-                  key={quote.id}
-                  style={styles.listCard}
-                  onPress={() => router.push(`/quote/${quote.id}`)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.listQuoteText, isArabic && arabicQuoteSmallOverride]} numberOfLines={2}>
-                    "{isArabic && quote.textAr ? quote.textAr : quote.text}"
+            .map((quote) => (
+              <TouchableOpacity
+                key={quote.id}
+                style={styles.listCard}
+                onPress={() => router.push(`/quote/${quote.id}`)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.listQuoteText, isArabic && arabicQuoteSmallOverride]} numberOfLines={2}>
+                  "{isArabic && quote.textAr ? quote.textAr : quote.text}"
+                </Text>
+                <View style={styles.listAttribution}>
+                  <View
+                    style={[
+                      styles.listDot,
+                      { backgroundColor: quote.scholar?.accentColor || Colors.accent },
+                    ]}
+                  />
+                  <Text style={styles.listScholar}>
+                    {isArabic && quote.scholar?.nameAr ? quote.scholar.nameAr : quote.scholar?.name}
                   </Text>
-                  <View style={styles.listAttribution}>
-                    <View
-                      style={[
-                        styles.listDot,
-                        { backgroundColor: quote.scholar?.accentColor || Colors.accent },
-                      ]}
-                    />
-                    <Text style={styles.listScholar}>
-                      {isArabic && quote.scholar?.nameAr ? quote.scholar.nameAr : quote.scholar?.name}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                </View>
+              </TouchableOpacity>
+            ))}
         </View>
 
         <View style={{ height: 40 }} />
@@ -344,87 +401,107 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: Colors.textMuted,
     textAlign: 'center',
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
-  quoteCard: {
-    backgroundColor: Colors.card,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginHorizontal: Spacing.lg,
+  quoteOfTheDayLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 2,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    marginBottom: Spacing.md,
+  },
+  cardWrapper: {
+    borderRadius: BorderRadius.xl,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
-    borderLeftWidth: 3,
+    overflow: 'hidden',
+    minHeight: 420,
+  },
+  quoteCard: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xl + 4,
+    paddingBottom: Spacing.xl,
+    justifyContent: 'space-between',
+  },
+  cardTopContent: {
+    alignItems: 'center',
+  },
+  cardBottomContent: {
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+  },
+  cardGlow: {
+    position: 'absolute',
+    top: -110,
+    right: -80,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    opacity: 0.08,
   },
   topicRow: {
     flexDirection: 'row',
-    marginBottom: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: Spacing.sm,
   },
-  topicBadge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.full,
+  topicRule: {
+    width: 22,
+    height: 1,
   },
   topicText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2.5,
+  },
+  glyph: {
+    fontSize: 68,
+    lineHeight: 56,
+    height: 44,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   quoteText: {
     ...Typography.quoteDisplay,
     color: Colors.textPrimary,
-    marginBottom: Spacing.lg,
+    textAlign: 'center',
+    marginTop: Spacing.xs,
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginBottom: Spacing.md,
-  },
-  attribution: {
+  ornament: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  scholarAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
     justifyContent: 'center',
+    gap: 10,
+    marginBottom: Spacing.md,
+  },
+  ornamentLine: {
+    width: 32,
+    height: 1,
+  },
+  ornamentDiamond: {
+    width: 6,
+    height: 6,
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }],
+  },
+  attribution: {
     alignItems: 'center',
-    marginRight: Spacing.md,
-  },
-  scholarInitials: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  attributionText: {
-    flex: 1,
+    justifyContent: 'center',
   },
   scholarName: {
     ...Typography.scholarName,
     color: Colors.textPrimary,
+    textAlign: 'center',
     marginBottom: 2,
   },
   bookName: {
     ...Typography.bookTitle,
     color: Colors.textMuted,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: Spacing.md,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accentSubtle,
-  },
-  dotActive: {
-    backgroundColor: Colors.accent,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',
@@ -492,5 +569,66 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: Colors.textMuted,
+  },
+  // ── Card flip ────────────────────────────────────────────
+  cardFace: {
+    width: '100%',
+    minHeight: 420,
+    backfaceVisibility: 'hidden',
+  },
+  cardFaceBack: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  heartOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flipHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  flipHintText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.textMuted,
+  },
+  // ── Commentary back face ─────────────────────────────────
+  commentaryContent: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: Spacing.lg,
+  },
+  commentaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: Spacing.lg,
+  },
+  commentaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  commentaryText: {
+    fontSize: 16,
+    fontWeight: '400',
+    lineHeight: 26,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
 });

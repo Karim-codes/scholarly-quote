@@ -1,6 +1,5 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     FlatList,
@@ -14,14 +13,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
+import type { Quote, Scholar } from '@/constants/Types';
 import { TOPICS, TOPIC_ICONS, Topic } from '@/constants/Types';
 import { arabicQuoteSmallOverride } from '@/constants/Typography';
-import {
-    getAllQuotesWithRelations,
-    getQuotesByScholar,
-    getQuotesByTopic,
-    scholars,
-} from '@/data/mockData';
+import { getAllQuotes, getAllScholars, getQuotesByScholarAsync, getQuotesByTopicAsync } from '@/data/database';
 import { useLanguage } from '@/store/useLanguageStore';
 
 type FilterMode = 'scholars' | 'topics';
@@ -35,11 +30,27 @@ export default function BrowseScreen() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [selectedScholar, setSelectedScholar] = useState<string | null>(null);
 
-  const filteredQuotes = useMemo(() => {
-    if (selectedTopic) return getQuotesByTopic(selectedTopic);
-    if (selectedScholar) return getQuotesByScholar(selectedScholar);
-    return getAllQuotesWithRelations();
-  }, [selectedTopic, selectedScholar]);
+  const [scholars, setScholars] = useState<Scholar[]>([]);
+  const [allQuotes, setAllQuotes] = useState<Quote[]>([]);
+  const [filteredQuotes, setFilteredQuotes] = useState<Quote[]>([]);
+
+  useEffect(() => {
+    Promise.all([getAllScholars(), getAllQuotes()]).then(([s, q]) => {
+      setScholars(s);
+      setAllQuotes(q);
+      setFilteredQuotes(q);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (selectedTopic) {
+      getQuotesByTopicAsync(selectedTopic).then(setFilteredQuotes);
+    } else if (selectedScholar) {
+      getQuotesByScholarAsync(selectedScholar).then(setFilteredQuotes);
+    } else {
+      setFilteredQuotes(allQuotes);
+    }
+  }, [selectedTopic, selectedScholar, allQuotes]);
 
   const clearFilters = () => {
     setSelectedTopic(null);
@@ -48,6 +59,8 @@ export default function BrowseScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Sticky filter section — sits above the scrollable list */}
+      <View style={styles.filterSection}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('browse.title')}</Text>
@@ -104,9 +117,6 @@ export default function BrowseScreen() {
                 <Text style={[styles.chipText, selectedScholar === scholar.id && { color: scholar.accentColor }]}>
                   {scholar.shortName}
                 </Text>
-                {scholar.isPremium && (
-                  <FontAwesome name="lock" size={10} color={Colors.accentDim} style={{ marginLeft: 4 }} />
-                )}
               </Pressable>
             ))}
           </View>
@@ -151,6 +161,7 @@ export default function BrowseScreen() {
           </TouchableOpacity>
         )}
       </View>
+      </View>
 
       {/* Quotes list */}
       <FlatList
@@ -164,12 +175,6 @@ export default function BrowseScreen() {
             onPress={() => router.push(`/quote/${quote.id}`)}
             activeOpacity={0.8}
           >
-            {quote.isPremium && (
-              <View style={styles.premiumBadge}>
-                <FontAwesome name="lock" size={10} color={Colors.accentMuted} />
-                <Text style={styles.premiumText}>{t('browse.premium')}</Text>
-              </View>
-            )}
             <Text style={[styles.quoteText, isArabic && arabicQuoteSmallOverride]} numberOfLines={3}>
               "{isArabic && quote.textAr ? quote.textAr : quote.text}"
             </Text>
@@ -205,6 +210,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  filterSection: {
+    backgroundColor: Colors.background,
+    zIndex: 1,
+    paddingBottom: Spacing.xs,
   },
   header: {
     paddingHorizontal: Spacing.lg,
@@ -299,8 +309,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   resultsCount: {
     fontSize: 14,

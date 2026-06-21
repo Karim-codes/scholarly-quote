@@ -8,8 +8,8 @@ const SAVED_KEY = '@scholar_quote_saved_ids';
 const PREMIUM_KEY = '@scholar_quote_premium';
 const STREAK_KEY = '@scholar_quote_streak';
 
-// Free tier limit — premium unlocks unlimited saves.
-export const FREE_SAVE_LIMIT = 20;
+// All saves are free — no limit.
+export const FREE_SAVE_LIMIT = Infinity;
 
 // ─── Shared in-memory state ──────────────────────────────────
 let savedQuoteIds: Set<string> = new Set();
@@ -104,10 +104,7 @@ export function useSavedQuotes() {
       notify();
       return { ok: true };
     }
-    // Enforce free-tier save limit.
-    if (!isPremiumUser && savedQuoteIds.size >= FREE_SAVE_LIMIT) {
-      return { ok: false, limitReached: true };
-    }
+    // No save limit — all saves are free.
     savedQuoteIds.add(quoteId);
     persistSaved();
     notify();

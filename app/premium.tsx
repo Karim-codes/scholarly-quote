@@ -3,24 +3,22 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BorderRadius, Colors, Spacing } from '@/constants/Colors';
-import { scholars } from '@/data/mockData';
+import type { Scholar } from '@/constants/Types';
+import { getAllScholars } from '@/data/database';
 import { usePremium } from '@/store/useAppStore';
 
-type PlanType = 'lifetime' | 'monthly';
-
-const FEATURE_ICONS = ['th-large', 'image', 'bookmark', 'bell', 'heart'];
+const FEATURE_ICONS = ['check-circle', 'th-large', 'bookmark', 'server', 'certificate'];
 const FEATURE_KEYS = [
   'premium.feature1',
   'premium.feature2',
@@ -32,10 +30,13 @@ const FEATURE_KEYS = [
 export default function PremiumScreen() {
   const router = useRouter();
   const { t } = useTranslation();
-  const [selectedPlan, setSelectedPlan] = useState<PlanType>('lifetime');
   const [processing, setProcessing] = useState(false);
   const { isPremium, purchase, restore } = usePremium();
-  const allScholars = scholars;
+  const [allScholars, setAllScholars] = useState<Scholar[]>([]);
+
+  useEffect(() => {
+    getAllScholars().then(setAllScholars);
+  }, []);
 
   // Marquee animation for scholar chips
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -59,7 +60,7 @@ export default function PremiumScreen() {
     if (processing) return;
     setProcessing(true);
     try {
-      const success = await purchase(selectedPlan);
+      const success = await purchase('lifetime');
       if (success) {
         Alert.alert(t('premium.successTitle'), t('premium.successMsg'), [
           { text: t('premium.ok'), onPress: () => router.back() },
@@ -88,7 +89,7 @@ export default function PremiumScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Close button */}
       <View style={styles.topBar}>
         <TouchableOpacity
@@ -100,14 +101,11 @@ export default function PremiumScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.pageContent}>
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.iconCircle}>
-            <FontAwesome name="star" size={32} color={Colors.accent} />
+            <FontAwesome name="heart" size={24} color="#e85d5d" />
           </View>
           <Text style={styles.heroTitle}>{t('premium.title')}</Text>
           <Text style={styles.heroSubtitle}>{t('premium.subtitle')}</Text>
@@ -116,20 +114,22 @@ export default function PremiumScreen() {
           </Text>
         </View>
 
-        {/* Features */}
+        {/* What you get (everything is free) */}
         <View style={styles.featuresSection}>
           {FEATURE_KEYS.map((key, index) => (
             <View key={index} style={styles.featureRow}>
               <View style={styles.featureIconWrap}>
-                <FontAwesome name={FEATURE_ICONS[index] as any} size={14} color={Colors.accent} />
+                <FontAwesome name={FEATURE_ICONS[index] as any} size={13} color={Colors.accent} />
               </View>
               <Text style={styles.featureText}>{t(key)}</Text>
             </View>
           ))}
         </View>
 
+        {/* Free note */}
+        <Text style={styles.freeNote}>{t('premium.freeNote')}</Text>
+
         {/* Scholars marquee */}
-        <Text style={styles.sectionTitle}>{t('premium.unlockScholars')}</Text>
         <View style={styles.marqueeContainer}>
           <Animated.View
             style={[
@@ -137,7 +137,6 @@ export default function PremiumScreen() {
               { transform: [{ translateX: scrollX }] },
             ]}
           >
-            {/* Duplicate list for seamless loop */}
             {[...allScholars, ...allScholars].map((scholar, i) => (
               <View key={`${scholar.id}-${i}`} style={styles.scholarChip}>
                 <View
@@ -149,39 +148,16 @@ export default function PremiumScreen() {
           </Animated.View>
         </View>
 
-        {/* Pricing cards */}
-        <View style={styles.pricingSection}>
-          {/* Lifetime — hero plan */}
-          <TouchableOpacity
-            style={[
-              styles.pricingCard,
-              selectedPlan === 'lifetime' && styles.pricingCardSelected,
-            ]}
-            onPress={() => setSelectedPlan('lifetime')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.bestValueBadge}>
-              <Text style={styles.bestValueText}>{t('premium.bestValue')}</Text>
-            </View>
-            <Text style={styles.planName}>{t('premium.lifetime')}</Text>
-            <Text style={styles.planPrice}>{t('premium.lifetimePrice')}</Text>
-            <Text style={styles.planPriceNote}>{t('premium.oneTime')}</Text>
-            <Text style={styles.planSavings}>{t('premium.savings')}</Text>
-          </TouchableOpacity>
+        {/* Spacer pushes bottom content down */}
+        <View style={{ flex: 1 }} />
 
-          {/* Monthly */}
-          <TouchableOpacity
-            style={[
-              styles.pricingCard,
-              selectedPlan === 'monthly' && styles.pricingCardSelected,
-            ]}
-            onPress={() => setSelectedPlan('monthly')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.planName}>{t('premium.monthly')}</Text>
-            <Text style={styles.planPrice}>{t('premium.monthlyPrice')}</Text>
-            <Text style={styles.planPriceNote}>{t('premium.perMonth')}</Text>
-          </TouchableOpacity>
+        {/* Support card */}
+        <View style={styles.supportCard}>
+          <View style={styles.supportBadge}>
+            <Text style={styles.supportBadgeText}>{t('premium.supporterBadge')}</Text>
+          </View>
+          <Text style={styles.supportPrice}>{t('premium.supportPrice')}</Text>
+          <Text style={styles.supportNote}>{t('premium.oneTime')}</Text>
         </View>
 
         {/* CTA */}
@@ -195,16 +171,12 @@ export default function PremiumScreen() {
             <ActivityIndicator color={Colors.background} />
           ) : (
             <Text style={styles.ctaText}>
-              {isPremium
-                ? t('premium.ctaActive')
-                : selectedPlan === 'lifetime'
-                  ? t('premium.ctaLifetime')
-                  : t('premium.ctaMonthly')}
+              {isPremium ? t('premium.ctaActive') : t('premium.ctaSupport')}
             </Text>
           )}
         </TouchableOpacity>
 
-        {/* Legal */}
+        {/* Legal + Restore */}
         <Text style={styles.legalText}>
           {t('premium.legal')}
         </Text>
@@ -212,9 +184,7 @@ export default function PremiumScreen() {
         <TouchableOpacity activeOpacity={0.7} onPress={handleRestore} disabled={processing}>
           <Text style={styles.restoreText}>{t('premium.restore')}</Text>
         </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -240,23 +210,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.cardBorder,
   },
-  scrollContent: {
+  pageContent: {
+    flex: 1,
     paddingHorizontal: Spacing.lg,
   },
   hero: {
     alignItems: 'center',
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   iconCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.accent + '0a',
+    backgroundColor: '#e85d5d' + '12',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.accent + '20',
+    borderColor: '#e85d5d' + '30',
   },
   heroTitle: {
     fontSize: 12,
@@ -268,16 +239,16 @@ const styles = StyleSheet.create({
   heroSubtitle: {
     fontSize: 24,
     fontWeight: '700',
-    letterSpacing: 4,
+    letterSpacing: 2,
     color: Colors.textPrimary,
     marginBottom: Spacing.sm,
   },
   heroDesc: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '400',
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   featuresSection: {
     backgroundColor: Colors.card,
@@ -285,17 +256,17 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.cardBorder,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Spacing.sm,
+    marginBottom: 6,
   },
   featureIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: Colors.accent + '0a',
     justifyContent: 'center',
     alignItems: 'center',
@@ -307,17 +278,18 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     flex: 1,
   },
-  sectionTitle: {
+  freeNote: {
     fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: Colors.textMuted,
+    fontWeight: '400',
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
     marginBottom: Spacing.md,
   },
   marqueeContainer: {
     overflow: 'hidden',
-    height: 44,
-    marginBottom: Spacing.lg,
+    height: 40,
+    marginBottom: Spacing.md,
   },
   marqueeTrack: {
     flexDirection: 'row',
@@ -345,63 +317,41 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.textSecondary,
   },
-  pricingSection: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  pricingCard: {
-    flex: 1,
+  supportCard: {
     backgroundColor: Colors.card,
     borderRadius: BorderRadius.lg,
     padding: Spacing.md,
     borderWidth: 1.5,
-    borderColor: Colors.cardBorder,
+    borderColor: '#e85d5d' + '40',
     alignItems: 'center',
+    marginBottom: Spacing.md,
   },
-  pricingCardSelected: {
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accent + '08',
-  },
-  bestValueBadge: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
+  supportBadge: {
+    backgroundColor: '#e85d5d' + '18',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
     marginBottom: Spacing.sm,
   },
-  bestValueText: {
-    fontSize: 10,
+  supportBadgeText: {
+    fontSize: 13,
     fontWeight: '700',
-    letterSpacing: 1,
-    color: Colors.background,
+    letterSpacing: 1.5,
+    color: '#e85d5d',
   },
-  planName: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  planPrice: {
-    fontSize: 28,
+  supportPrice: {
+    fontSize: 36,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  planPriceNote: {
-    fontSize: 13,
+  supportNote: {
+    fontSize: 14,
     fontWeight: '400',
     color: Colors.textMuted,
   },
-  planSavings: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-    marginTop: Spacing.sm,
-  },
   ctaButton: {
-    backgroundColor: Colors.accent,
+    backgroundColor: '#e85d5d',
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.md,
     alignItems: 'center',
@@ -416,7 +366,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.5,
-    color: Colors.background,
+    color: '#ffffff',
   },
   legalText: {
     fontSize: 12,
