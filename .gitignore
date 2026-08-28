@@ -30,9 +30,17 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# Local environment files. Keep .env.example committed as documentation.
 .env
-.env*.local
+.env.*
+!.env.example
+
+# Service-account and mobile signing credentials
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+credentials*.json
+*.keystore
 
 # typescript
 *.tsbuildinfo

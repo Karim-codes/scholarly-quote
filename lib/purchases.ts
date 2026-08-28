@@ -20,9 +20,10 @@ import { Platform } from 'react-native';
 
 export type PlanId = 'lifetime' | 'monthly';
 
-// RevenueCat public SDK keys — replace with your real keys before launch.
-const REVENUECAT_API_KEY_IOS = '';
-const REVENUECAT_API_KEY_ANDROID = '';
+// RevenueCat public SDK keys are read from Expo env vars so nothing sensitive
+// has to live in source control.
+const REVENUECAT_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS ?? '';
+const REVENUECAT_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID ?? '';
 
 // The entitlement identifier configured in the RevenueCat dashboard.
 const ENTITLEMENT_ID = 'premium';
