@@ -69,6 +69,7 @@ export default {
     errEmail: 'الرجاء إدخال بريد إلكتروني صالح.',
     errNotConfigured: 'لم يتم إعداد تسجيل الدخول بعد. حاول مرة أخرى لاحقاً.',
     errGeneric: 'حدث خطأ ما. الرجاء المحاولة مرة أخرى.',
+    googleUnavailable: 'يتطلب تسجيل الدخول عبر Google نسخة تطوير مخصصة أو نسخة إنتاج. تسجيل الدخول بالبريد متاح بعد إعداد Firebase.',
   },
 
   // Save limit paywall

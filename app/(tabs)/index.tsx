@@ -2,7 +2,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
@@ -14,6 +14,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import ShareModal from '@/components/ShareModal';
@@ -22,7 +23,7 @@ import type { Quote } from '@/constants/Types';
 import { FontFamily, Typography, arabicQuoteOverride, arabicQuoteSmallOverride } from '@/constants/Typography';
 import { getAllQuotes, getDailyQuoteAsync } from '@/data/database';
 import { useSaveQuote } from '@/hooks/useSaveQuote';
-import { useSavedQuotes, useStreak } from '@/store/useAppStore';
+import { useSavedQuotes } from '@/store/useAppStore';
 import { useLanguage } from '@/store/useLanguageStore';
 import { syncDailyQuoteToWidget } from '@/store/widgetSync';
 
@@ -33,10 +34,10 @@ export default function TodayScreen() {
   const isArabic = effectiveQuoteLanguage === 'ar';
   const { getSavedIds } = useSavedQuotes();
   const { save, isSaved } = useSaveQuote();
-  const { currentStreak } = useStreak();
   const [shareVisible, setShareVisible] = useState(false);
 
   // ── Async data from SQLite ─────────────────────────────────
+  const [dailyQuote, setDailyQuote] = useState<Quote | null>(null);
   const [currentQuote, setCurrentQuote] = useState<Quote | null>(null);
   const [allQuotes, setAllQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +47,7 @@ export default function TodayScreen() {
     (async () => {
       const [daily, all] = await Promise.all([getDailyQuoteAsync(), getAllQuotes()]);
       if (!cancelled) {
+        setDailyQuote(daily);
         setCurrentQuote(daily);
         setAllQuotes(all);
         setLoading(false);
@@ -54,10 +56,10 @@ export default function TodayScreen() {
     return () => { cancelled = true; };
   }, []);
 
-  // Push today's quote to the iOS home-screen widget whenever it changes.
+  // Push the true daily quote to the iOS home-screen widget.
   useEffect(() => {
-    if (currentQuote) syncDailyQuoteToWidget(currentQuote);
-  }, [currentQuote?.id, effectiveQuoteLanguage]);
+    if (dailyQuote) syncDailyQuoteToWidget(dailyQuote);
+  }, [dailyQuote?.id, effectiveQuoteLanguage]);
 
   const saved = currentQuote ? isSaved(currentQuote.id) : false;
   const accentColor = currentQuote?.scholar?.accentColor || Colors.accent;
@@ -105,6 +107,16 @@ export default function TodayScreen() {
   const backRotate = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['-90deg', '-90deg', '0deg'] });
   const frontOpacity = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0, 0] });
   const backOpacity = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+  const cardSlide = useRef(new Animated.Value(0)).current;
+  const cardLift = useRef(new Animated.Value(0)).current;
+  const cardScale = useRef(new Animated.Value(1)).current;
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const cardTilt = useRef(new Animated.Value(0)).current;
+  const isSwapping = useRef(false);
+  const cardRotation = cardTilt.interpolate({
+    inputRange: [-1, 0, 1],
+    outputRange: ['-2deg', '0deg', '2deg'],
+  });
 
   const commentaryText = isArabic && currentQuote?.commentaryAr
     ? currentQuote.commentaryAr
@@ -118,6 +130,63 @@ export default function TodayScreen() {
     .slice(0, 3);
 
   const handleShare = () => setShareVisible(true);
+
+  const handleQuoteSwap = useCallback((direction: 1 | -1 = 1) => {
+    if (!currentQuote || allQuotes.length < 2 || isSwapping.current) return;
+
+    const currentIndex = allQuotes.findIndex((quote) => quote.id === currentQuote.id);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + direction + allQuotes.length) % allQuotes.length;
+    const exitDirection = direction === 1 ? -1 : 1;
+
+    isSwapping.current = true;
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    Animated.parallel([
+      Animated.timing(cardSlide, { toValue: exitDirection * 130, duration: 170, useNativeDriver: true }),
+      Animated.timing(cardLift, { toValue: -10, duration: 170, useNativeDriver: true }),
+      Animated.timing(cardScale, { toValue: 0.96, duration: 170, useNativeDriver: true }),
+      Animated.timing(cardOpacity, { toValue: 0, duration: 150, useNativeDriver: true }),
+      Animated.timing(cardTilt, { toValue: exitDirection, duration: 170, useNativeDriver: true }),
+    ]).start(() => {
+      setFlipped(false);
+      flipAnim.setValue(0);
+      setCurrentQuote(allQuotes[nextIndex]);
+
+      cardSlide.setValue(-exitDirection * 90);
+      cardLift.setValue(-6);
+      cardScale.setValue(0.97);
+      cardOpacity.setValue(0.35);
+      cardTilt.setValue(-exitDirection * 0.7);
+
+      Animated.parallel([
+        Animated.spring(cardSlide, { toValue: 0, friction: 8, tension: 90, useNativeDriver: true }),
+        Animated.spring(cardLift, { toValue: 0, friction: 8, tension: 90, useNativeDriver: true }),
+        Animated.spring(cardScale, { toValue: 1, friction: 8, tension: 90, useNativeDriver: true }),
+        Animated.spring(cardTilt, { toValue: 0, friction: 8, tension: 90, useNativeDriver: true }),
+        Animated.timing(cardOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]).start(() => {
+        isSwapping.current = false;
+      });
+    });
+  }, [allQuotes, cardLift, cardOpacity, cardScale, cardSlide, cardTilt, currentQuote, flipAnim]);
+
+  const quoteSwipeGesture = useMemo(
+    () => Gesture.Pan()
+      .activeOffsetX([-18, 18])
+      .failOffsetY([-24, 24])
+      .onEnd((event) => {
+        const isLeftSwipe = event.translationX < -35 || event.velocityX < -450;
+        const isRightSwipe = event.translationX > 35 || event.velocityX > 450;
+
+        if (isLeftSwipe) {
+          handleQuoteSwap(1);
+        } else if (isRightSwipe) {
+          handleQuoteSwap(-1);
+        }
+      })
+      .runOnJS(true),
+    [handleQuoteSwap],
+  );
 
   const today = new Date();
   const locale = i18n.language === 'ar' ? 'ar-SA' : 'en-US';
@@ -149,10 +218,6 @@ export default function TodayScreen() {
             <Text style={styles.appTitle}>Scholar Quote</Text>
             <Text style={styles.dateText}>{dateString}</Text>
           </View>
-          <TouchableOpacity style={styles.streakBadge} activeOpacity={0.7}>
-            <Text style={styles.streakNumber}>{currentStreak}</Text>
-            <Text style={styles.streakLabel}>{t('today.streakLabel')}</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Bismillah */}
@@ -161,8 +226,20 @@ export default function TodayScreen() {
         {/* Quote of the Day label */}
         <Text style={styles.quoteOfTheDayLabel}>{t('today.quoteOfTheDay')}</Text>
 
-        {/* Daily Quote Card — double-tap to save, tap flip hint for commentary */}
-        <Pressable onPress={handleDoubleTap} style={styles.cardWrapper}>
+        {/* Daily Quote Card — swipe for another quote, double-tap to save, tap flip hint for commentary */}
+        <GestureDetector gesture={quoteSwipeGesture}>
+          <Animated.View
+            style={{
+              opacity: cardOpacity,
+              transform: [
+                { translateX: cardSlide },
+                { translateY: cardLift },
+                { scale: cardScale },
+                { rotateZ: cardRotation },
+              ],
+            }}
+          >
+          <Pressable onPress={handleDoubleTap} style={styles.cardWrapper}>
           {/* ── FRONT FACE ── */}
           <Animated.View style={[styles.cardFace, { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontRotate }] }]}>
             <LinearGradient
@@ -240,7 +317,14 @@ export default function TodayScreen() {
           <Animated.View pointerEvents="none" style={[styles.heartOverlay, { opacity: heartOpacity, transform: [{ scale: heartScale }] }]}>
             <FontAwesome name="heart" size={64} color={Colors.accent} />
           </Animated.View>
-        </Pressable>
+          </Pressable>
+          </Animated.View>
+        </GestureDetector>
+
+        <View style={styles.swapHintRow}>
+          <FontAwesome name="exchange" size={12} color={Colors.textMuted} />
+          <Text style={styles.swapHintText}>{t('today.swipeHint')}</Text>
+        </View>
 
         {/* Action buttons */}
         <View style={styles.actions}>
@@ -377,26 +461,6 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.textMuted,
   },
-  streakBadge: {
-    alignItems: 'center',
-    backgroundColor: Colors.accent + '08',
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.accent + '15',
-  },
-  streakNumber: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  streakLabel: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
   bismillah: {
     fontSize: 18,
     color: Colors.textMuted,
@@ -506,8 +570,8 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: Spacing.xl + 8,
-    marginTop: Spacing.lg,
+    gap: Spacing.xl,
+    marginTop: Spacing.md,
     marginBottom: Spacing.xxl,
   },
   actionButton: {
@@ -518,6 +582,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: Colors.textSecondary,
+  },
+  swapHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: Spacing.md,
+  },
+  swapHintText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.textMuted,
   },
   section: {
     marginBottom: Spacing.lg,

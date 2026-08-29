@@ -69,6 +69,7 @@ export default {
     errEmail: 'Please enter a valid email address.',
     errNotConfigured: 'Sign-in is not configured yet. Please try again later.',
     errGeneric: 'Something went wrong. Please try again.',
+    googleUnavailable: 'Google sign-in needs a custom development or production build. Email sign-in is available once Firebase is configured.',
   },
 
   // Save limit paywall

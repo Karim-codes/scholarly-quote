@@ -1,203 +1,68 @@
-import * as SQLite from 'expo-sqlite';
-
 import { Colors } from '@/constants/Colors';
 import { Book, Quote, Scholar, Topic } from '@/constants/Types';
+import {
+  books as fallbackBooks,
+  getAllQuotesWithRelations,
+  getBookById,
+  getDailyQuote,
+  getFreeQuotes,
+  getFreeScolars,
+  getPremiumScholars,
+  getQuoteWithRelations,
+  getQuotesByScholar,
+  getQuotesByTopic,
+  getScholarById,
+  scholars as fallbackScholars,
+} from '@/data/mockData';
 
-// ─── Database singleton ──────────────────────────────────────
-let _db: SQLite.SQLiteDatabase | null = null;
-
-export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
-  if (_db) return _db;
-  _db = await SQLite.openDatabaseAsync('scholar_quotes.db');
-  await _db.execAsync('PRAGMA journal_mode = WAL;');
-  await createTables(_db);
-  await seedIfEmpty(_db);
-  return _db;
-}
-
-// ─── Schema ──────────────────────────────────────────────────
-async function createTables(db: SQLite.SQLiteDatabase) {
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS scholars (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      shortName TEXT NOT NULL,
-      nameAr TEXT NOT NULL,
-      era TEXT NOT NULL,
-      school TEXT NOT NULL,
-      bio TEXT NOT NULL,
-      accentColor TEXT NOT NULL,
-      isPremium INTEGER NOT NULL DEFAULT 0,
-      initials TEXT NOT NULL,
-      quoteCount INTEGER NOT NULL DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS books (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      titleAr TEXT NOT NULL,
-      scholarId TEXT NOT NULL,
-      yearWritten TEXT,
-      FOREIGN KEY (scholarId) REFERENCES scholars(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS quotes (
-      id TEXT PRIMARY KEY,
-      text TEXT NOT NULL,
-      textAr TEXT,
-      scholarId TEXT NOT NULL,
-      bookId TEXT NOT NULL,
-      topic TEXT NOT NULL,
-      isPremium INTEGER NOT NULL DEFAULT 0,
-      isVerified INTEGER NOT NULL DEFAULT 1,
-      commentary TEXT,
-      commentaryAr TEXT,
-      FOREIGN KEY (scholarId) REFERENCES scholars(id),
-      FOREIGN KEY (bookId) REFERENCES books(id)
-    );
-  `);
-}
-
-// ─── Seed data ───────────────────────────────────────────────
-async function seedIfEmpty(db: SQLite.SQLiteDatabase) {
-  const row = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM scholars'
-  );
-  if (row && row.count > 0) return; // already seeded
-
-  // Scholars
-  for (const s of SEED_SCHOLARS) {
-    await db.runAsync(
-      `INSERT OR IGNORE INTO scholars (id, name, shortName, nameAr, era, school, bio, accentColor, isPremium, initials, quoteCount)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      s.id, s.name, s.shortName, s.nameAr, s.era, s.school, s.bio,
-      s.accentColor, s.isPremium ? 1 : 0, s.initials, s.quoteCount
-    );
-  }
-
-  // Books
-  for (const b of SEED_BOOKS) {
-    await db.runAsync(
-      `INSERT OR IGNORE INTO books (id, title, titleAr, scholarId, yearWritten)
-       VALUES (?, ?, ?, ?, ?)`,
-      b.id, b.title, b.titleAr, b.scholarId, b.yearWritten ?? null
-    );
-  }
-
-  // Quotes
-  for (const q of SEED_QUOTES) {
-    await db.runAsync(
-      `INSERT OR IGNORE INTO quotes (id, text, textAr, scholarId, bookId, topic, isPremium, isVerified, commentary, commentaryAr)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      q.id, q.text, q.textAr ?? null, q.scholarId, q.bookId, q.topic,
-      q.isPremium ? 1 : 0, q.isVerified ? 1 : 0,
-      q.commentary ?? null, q.commentaryAr ?? null
-    );
-  }
+// The app currently ships a bundled quote collection, so reads use in-memory
+// data. Keeping these async helpers lets screens stay unchanged if persistence
+// is reintroduced later.
+export async function getDatabase(): Promise<never> {
+  throw new Error('database-disabled');
 }
 
 // ─── Query helpers ───────────────────────────────────────────
 
 export async function getAllScholars(): Promise<Scholar[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>('SELECT * FROM scholars');
-  return rows.map(mapScholar);
+  return fallbackScholars;
 }
 
 export async function getScholarByIdAsync(id: string): Promise<Scholar | undefined> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<any>('SELECT * FROM scholars WHERE id = ?', id);
-  return row ? mapScholar(row) : undefined;
+  return getScholarById(id);
 }
 
 export async function getAllBooks(): Promise<Book[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>('SELECT * FROM books');
-  return rows.map(mapBook);
+  return fallbackBooks;
 }
 
 export async function getBookByIdAsync(id: string): Promise<Book | undefined> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<any>('SELECT * FROM books WHERE id = ?', id);
-  return row ? mapBook(row) : undefined;
+  return getBookById(id);
 }
 
 export async function getAllQuotes(): Promise<Quote[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(`
-    SELECT q.*, s.name as scholarName, s.shortName as scholarShortName,
-           s.nameAr as scholarNameAr, s.era, s.school, s.bio,
-           s.accentColor, s.isPremium as scholarIsPremium, s.initials, s.quoteCount,
-           b.title as bookTitle, b.titleAr as bookTitleAr, b.yearWritten
-    FROM quotes q
-    LEFT JOIN scholars s ON q.scholarId = s.id
-    LEFT JOIN books b ON q.bookId = b.id
-  `);
-  return rows.map(mapQuoteWithRelations);
+  return getAllQuotesWithRelations();
 }
 
 export async function getQuoteByIdAsync(id: string): Promise<Quote | undefined> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<any>(`
-    SELECT q.*, s.name as scholarName, s.shortName as scholarShortName,
-           s.nameAr as scholarNameAr, s.era, s.school, s.bio,
-           s.accentColor, s.isPremium as scholarIsPremium, s.initials, s.quoteCount,
-           b.title as bookTitle, b.titleAr as bookTitleAr, b.yearWritten
-    FROM quotes q
-    LEFT JOIN scholars s ON q.scholarId = s.id
-    LEFT JOIN books b ON q.bookId = b.id
-    WHERE q.id = ?
-  `, id);
-  return row ? mapQuoteWithRelations(row) : undefined;
+  const quote = getAllQuotesWithRelations().find((q) => q.id === id);
+  return quote ? getQuoteWithRelations(quote) : undefined;
 }
 
 export async function getQuotesByScholarAsync(scholarId: string): Promise<Quote[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(`
-    SELECT q.*, s.name as scholarName, s.shortName as scholarShortName,
-           s.nameAr as scholarNameAr, s.era, s.school, s.bio,
-           s.accentColor, s.isPremium as scholarIsPremium, s.initials, s.quoteCount,
-           b.title as bookTitle, b.titleAr as bookTitleAr, b.yearWritten
-    FROM quotes q
-    LEFT JOIN scholars s ON q.scholarId = s.id
-    LEFT JOIN books b ON q.bookId = b.id
-    WHERE q.scholarId = ?
-  `, scholarId);
-  return rows.map(mapQuoteWithRelations);
+  return getQuotesByScholar(scholarId);
 }
 
 export async function getQuotesByTopicAsync(topic: Topic): Promise<Quote[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(`
-    SELECT q.*, s.name as scholarName, s.shortName as scholarShortName,
-           s.nameAr as scholarNameAr, s.era, s.school, s.bio,
-           s.accentColor, s.isPremium as scholarIsPremium, s.initials, s.quoteCount,
-           b.title as bookTitle, b.titleAr as bookTitleAr, b.yearWritten
-    FROM quotes q
-    LEFT JOIN scholars s ON q.scholarId = s.id
-    LEFT JOIN books b ON q.bookId = b.id
-    WHERE q.topic = ?
-  `, topic);
-  return rows.map(mapQuoteWithRelations);
+  return getQuotesByTopic(topic);
 }
 
 export async function getFreeQuotesAsync(): Promise<Quote[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(`
-    SELECT q.*, s.name as scholarName, s.shortName as scholarShortName,
-           s.nameAr as scholarNameAr, s.era, s.school, s.bio,
-           s.accentColor, s.isPremium as scholarIsPremium, s.initials, s.quoteCount,
-           b.title as bookTitle, b.titleAr as bookTitleAr, b.yearWritten
-    FROM quotes q
-    LEFT JOIN scholars s ON q.scholarId = s.id
-    LEFT JOIN books b ON q.bookId = b.id
-    WHERE q.isPremium = 0
-  `);
-  return rows.map(mapQuoteWithRelations);
+  return getFreeQuotes();
 }
 
 export async function getDailyQuoteAsync(date: Date = new Date()): Promise<Quote> {
-  const allQuotes = await getAllQuotes();
+  const allQuotes = getAllQuotesWithRelations();
   const withCommentary = allQuotes.filter((q) => q.commentary);
   const pool = withCommentary.length > 0 ? withCommentary : allQuotes;
   const dayOfYear = Math.floor(
@@ -209,23 +74,15 @@ export async function getDailyQuoteAsync(date: Date = new Date()): Promise<Quote
 }
 
 export async function getFreeScolarsAsync(): Promise<Scholar[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>('SELECT * FROM scholars WHERE isPremium = 0');
-  return rows.map(mapScholar);
+  return getFreeScolars();
 }
 
 export async function getPremiumScholarsAsync(): Promise<Scholar[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>('SELECT * FROM scholars WHERE isPremium = 1');
-  return rows.map(mapScholar);
+  return getPremiumScholars();
 }
 
 export async function getBooksByScholarAsync(scholarId: string): Promise<Book[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
-    'SELECT * FROM books WHERE scholarId = ?', scholarId
-  );
-  return rows.map(mapBook);
+  return fallbackBooks.filter((book) => book.scholarId === scholarId);
 }
 
 // ─── Row mappers ─────────────────────────────────────────────

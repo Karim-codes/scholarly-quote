@@ -1,10 +1,8 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import { GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
+import { OAuthProvider } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,8 +26,6 @@ import {
   signUpWithEmail,
   useAuth,
 } from '@/store/useAuthStore';
-
-WebBrowser.maybeCompleteAuthSession();
 
 function authErrorMessage(e: any, t: (k: string) => string): string {
   const code = e?.code ?? '';
@@ -55,12 +51,6 @@ export default function AuthScreen() {
   const [busy, setBusy] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
 
-  const [, googleResponse, googlePrompt] = Google.useIdTokenAuthRequest({
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  });
-
   // Close the screen once the user is authenticated.
   useEffect(() => {
     if (isSignedIn) router.back();
@@ -71,18 +61,6 @@ export default function AuthScreen() {
       AppleAuthentication.isAvailableAsync().then(setAppleAvailable).catch(() => {});
     }
   }, []);
-
-  // Handle the Google redirect result.
-  useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const idToken = googleResponse.params?.id_token;
-      if (!idToken) return;
-      setBusy(true);
-      signInWithProviderCredential(GoogleAuthProvider.credential(idToken))
-        .catch((e) => Alert.alert(t('auth.title'), authErrorMessage(e, t)))
-        .finally(() => setBusy(false));
-    }
-  }, [googleResponse]);
 
   const handleEmailAuth = async () => {
     if (busy) return;
@@ -106,15 +84,7 @@ export default function AuthScreen() {
 
   const handleGoogle = async () => {
     if (busy) return;
-    if (!isConfigured) {
-      Alert.alert(t('auth.title'), t('auth.errNotConfigured'));
-      return;
-    }
-    try {
-      await googlePrompt();
-    } catch (e) {
-      Alert.alert(t('auth.title'), authErrorMessage(e, t));
-    }
+    Alert.alert(t('auth.title'), t('auth.googleUnavailable'));
   };
 
   const handleApple = async () => {

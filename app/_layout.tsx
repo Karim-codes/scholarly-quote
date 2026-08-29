@@ -1,4 +1,3 @@
-import { getDatabase } from '@/data/database';
 import '@/i18n';
 import { initAppStore } from '@/store/useAppStore';
 import { initAuth } from '@/store/useAuthStore';
@@ -105,7 +104,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     initAuth();
-    Promise.all([initLanguage(), initAppStore(), initUserStore(), getDatabase()]).finally(() => setLangReady(true));
+    Promise.all([initLanguage(), initAppStore(), initUserStore()]).finally(() => setLangReady(true));
   }, []);
 
   useEffect(() => {
