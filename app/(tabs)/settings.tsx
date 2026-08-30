@@ -139,11 +139,11 @@ export default function SettingsScreen() {
   };
 
   const handleTerms = () => {
-    Linking.openURL('https://scholarquote.app/terms');
+    Linking.openURL('https://wisdom-flow-archive.vercel.app/terms');
   };
 
   const handlePrivacy = () => {
-    Linking.openURL('https://scholarquote.app/privacy');
+    Linking.openURL('https://wisdom-flow-archive.vercel.app/privacy');
   };
 
   const currentLangLabel = language === 'ar' ? t('settings.arabic') : t('settings.english');

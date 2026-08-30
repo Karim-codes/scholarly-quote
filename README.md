@@ -97,7 +97,7 @@ npx tsc --noEmit
 
 - Add `ios.appleTeamId` in `app.json`.
 - Replace the placeholder App Store ID in Settings after the app is created in App Store Connect.
-- Confirm `https://scholarquote.app/terms` and `https://scholarquote.app/privacy` are live before release.
+- Confirm `https://wisdom-flow-archive.vercel.app/terms` and `https://wisdom-flow-archive.vercel.app/privacy` are live before release.
 - Configure Firebase Auth and Google OAuth clients.
 - Configure RevenueCat and store products if supporter purchases are enabled.
 - Run `npx expo-doctor` with network access.
